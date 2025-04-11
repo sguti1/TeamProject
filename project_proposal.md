@@ -48,7 +48,7 @@ Our stretch goal:
 |------|-----------|
 | Week 1 | Implement economic indicator weighting model + ETF formula |
 | Week 2 | Build frontend dashboard (table + graphs), backend API integration |
-| Week 3 | Integrate OpenAI chatbot, documentation, polish UI/UX |
+| Week 3 | Integrate OpenAI chatbot, documentation, polish UI/UX  |
 
 ---
 
