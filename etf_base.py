@@ -12,13 +12,16 @@ client = freecurrencyapi.Client(FREECURRENCY_API_KEY)
 url = f"https://api.freecurrencyapi.com/v1/latest?apikey={FREECURRENCY_API_KEY}"
 resp = requests.get(url)
 
-#this function can be altered so that we send a country
-def get_usd_to_cad():
-    result = client.latest(base_currency='USD', currencies=['CAD'])
-    return result['data']['CAD']
 
-rate = get_usd_to_cad()
-print(f"1 USD = {rate} CAD")
+def get_usd_to_currency(currency):
+    result = client.latest(base_currency='USD', currencies=[currency])
+    return result['data'][currency]
+
+
+def main():
+    currency = 'CAD'
+    rate = get_usd_to_currency(currency)
+    print(f"1 USD = {rate} {currency}")
 
 
 #Retrieve Currencies
@@ -35,4 +38,4 @@ print(f"1 USD = {rate} CAD")
 
 
 # print(resp.status_code)
-print(url)
+# print(url)
