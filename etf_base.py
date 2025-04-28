@@ -23,6 +23,9 @@ def main():
     rate = get_usd_to_currency(currency)
     print(f"1 USD = {rate} {currency}")
 
+if __name__ == "__main__":
+    main()
+
 
 #Retrieve Currencies
 # currency_result = client.currencies(currencies=['EUR', 'CAD'])
