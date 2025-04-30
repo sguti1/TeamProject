@@ -4,7 +4,9 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from dotenv import load_dotenv
 from countryinfo import CountryInfo
-from datetime import datetime
+from datetime import datetime, date, timedelta
+
+
 
 def fetch_fx_rates(api_key_env: str = 'FREECURRENCY_API_KEY') -> dict:
     """
@@ -78,53 +80,36 @@ def map_currencies(wide_df: pd.DataFrame) -> pd.DataFrame:
 
     return wide_df
 
-def apply_health_filters(
-    df: pd.DataFrame,
-    unemployment_thresh: float = 0.10,
-    debt_thresh: float = 1.0,
-    inflation_low: float = 0.0,
-    inflation_high: float = 0.07,
-    cav_thresh: float = 0.0,
-    ext_debt_thresh: float = 0.50
-) -> pd.DataFrame:
+def apply_health_filters(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Applies macro-health thresholds to drop countries that don’t meet all criteria:
-      - Unemployment rate ≤ unemployment_thresh
-      - Gross debt (% GDP) ≤ debt_thresh
-      - CPI inflation in [inflation_low, inflation_high]
-      - Current account balance (% GDP) ≥ cav_thresh
-      - External debt (% GDP) ≤ ext_debt_thresh
-      - GDP (USD) ≥ median GDP of all countries in DF
-      - Exports of goods & services (USD) ≥ median exports
+    Applies relaxed macro-health thresholds to drop countries that don’t meet all criteria:
+      - Unemployment rate ≤ 12%
+      - Gross debt (General government) ≤ 110% of GDP
+      - CPI inflation in [–2%, 50%]
+      - Current account balance ≥ –5% of GDP
+      - GDP ≥ 25th percentile GDP of all countries in DF
 
     If no country passes, skips filtering and returns the original DataFrame.
     """
+    # extract series by their exact column names
     unemp    = df['Unemployment rate']
     debt     = df['Gross debt, General government, Percent of GDP']
     infl     = df['All Items, Consumer price index (CPI), Period average, percent change']
     cav      = df['Current account balance (credit less debit), Percent of GDP']
-    ext_debt = df['External debt, Percent of GDP']
     gdp      = df['Gross domestic product (GDP), Current prices, US dollar']
-    exports  = df['Exports of goods and services, US dollar']
-
-    # compute medians for dynamic thresholds
-    median_gdp     = gdp.median()
-    median_export  = exports.median()
 
     mask = (
-        (unemp    <= unemployment_thresh) &
-        (debt     <= debt_thresh)        &
-        (infl.between(inflation_low, inflation_high)) &
-        (cav      >= cav_thresh)        &
-        (ext_debt <= ext_debt_thresh)   &
-        (gdp      >= median_gdp)        &
-        (exports  >= median_export)
+        (unemp    <= 15)               &
+        (debt     <= 110)              &
+        (infl.between(-2, 50))         &
+        (cav      >= -5)               
     )
 
     if mask.sum() == 0:
-        print("No countries passed the enhanced health filters; skipping filter.")
+        print("No countries passed the relaxed health filters; skipping filter.")
         return df
 
+    # otherwise return only the filtered rows
     return df[mask]
 
 
@@ -142,7 +127,7 @@ def compute_scores_and_weights(df: pd.DataFrame, final_inds: list) -> pd.DataFra
     Zdf['CompositeScore'] = Zdf.mean(axis=1)
     Zdf_pos = Zdf[Zdf['CompositeScore'] > 0].copy()
     if Zdf_pos.empty:
-        print("⚠️  No positive composite scores; using all.")
+        print("No positive composite scores; using all.")
         Zdf_pos = Zdf.copy()
     
     total = Zdf_pos['CompositeScore'].sum()
@@ -151,8 +136,10 @@ def compute_scores_and_weights(df: pd.DataFrame, final_inds: list) -> pd.DataFra
 
 def build_etf_table(imf_csv_path: str) -> pd.DataFrame:
     """
-    High-level function to build the ETF allocation table.Returns a DataFrame of CompositeScores and Weights by country.
+    High-level function to build the ETF allocation table.
+    Returns a DataFrame of CompositeScores and Weights by country.
     """
+    # 1) load & pivot IMF data
     indicators = [
         'Gross domestic product (GDP), Current prices, US dollar',
         'All Items, Consumer price index (CPI), Period average, percent change',
@@ -165,9 +152,24 @@ def build_etf_table(imf_csv_path: str) -> pd.DataFrame:
     df = load_imf_data(imf_csv_path)
     wide = extract_latest_values(df, indicators)
     wide = map_currencies(wide)
+    # 3) compute a 1-year FX return proxy using the same freecurrencyapi:
+    one_year_ago = (date.today() - timedelta(days=365)).isoformat()
+    hist = requests.get(
+        f"https://api.freecurrencyapi.com/v1/historical"
+        f"?apikey={os.getenv('FREECURRENCY_API_KEY')}"
+        f"&date={one_year_ago}"
+    ).json()['data'][one_year_ago]
+
+    # map that into a new column and get simple return
+    wide['FX Rate 1Y'] = wide['Currency'].map(hist)
+    wide['FX Change'] = (wide['FX Rate'] - wide['FX Rate 1Y']) / wide['FX Rate 1Y']
+
+    print(f"Pre-filter size: {wide.size}")
     wide = apply_health_filters(wide)
-    
-    final_inds = indicators + ['FX Rate']
+    print(f"Post-filter size: {wide.size}")
+
+    final_inds = indicators + ['FX Rate', 'FX Change']
+
     etf_table = compute_scores_and_weights(wide, final_inds)
     return etf_table, wide
 
@@ -191,19 +193,22 @@ def show_top10_table(etf_df: pd.DataFrame, wide_df: pd.DataFrame) -> pd.DataFram
     """
     top10 = etf_df.sort_values('Weight', ascending=False).head(10)
 
-    # Pull in all the columns we need from wide_df via .loc 
-    # In pandas, .loc is your label-based indexer. It lets you select rows and columns by their names (rather than by integer position).
     summary = pd.DataFrame({
-        'Country':        top10.index,
-        'Currency':       wide_df.loc[top10.index, 'Currency'],
-        'Weight (%)':     (top10['Weight'] * 100).round(2),
-        'Value USD':      (1 / wide_df.loc[top10.index, 'FX Rate']).round(2),
-        'GDP':            wide_df.loc[top10.index, 'Gross domestic product (GDP), Current prices, US dollar'].round(2),
-        'Unemployment (%)': wide_df.loc[top10.index, 'Unemployment rate'].round(2),
-        'Inflation (%)':  wide_df.loc[top10.index, 'All Items, Consumer price index (CPI), Period average, percent change'].round(2)
+        'Country':          top10.index,
+        'Currency':         wide_df.loc[top10.index, 'Currency'],
+        'Weight (%)':       top10['Weight'] * 100,
+        'Value ($)':        1 / wide_df.loc[top10.index, 'FX Rate'],
+        'GDP ($ Trillion)':              wide_df.loc[top10.index, 'Gross domestic product (GDP), Current prices, US dollar'],
+        'Unemployment (%)': wide_df.loc[top10.index, 'Unemployment rate'],
+        'Inflation (%)':    wide_df.loc[top10.index, 'All Items, Consumer price index (CPI), Period average, percent change']
     })
 
-    # Reset the integer index for display
+    pd.options.display.float_format = "{:.2f}".format
+
+    for col in ['Weight (%)','Value ($)','GDP ($ Trillion)','Unemployment (%)','Inflation (%)']:
+        summary[col] = summary[col].map(lambda x: f"{x:.2f}")
+
+
     return summary.reset_index(drop=True)
 
 
@@ -223,4 +228,3 @@ if __name__ == "__main__":
     summary = show_top10_table(etf_table, wide_df)
     print("\nTop 10 ETF Currency Summary:")
     print(summary.to_string(index=False))
-
