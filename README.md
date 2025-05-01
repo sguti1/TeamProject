@@ -23,7 +23,6 @@ We also created a visually designed web interface using HTML and CSS to present 
 
 ```bash
 git clone https://github.com/sguti1/TeamProject
-cd currency-insight
 ```
 
 2. **Installing dependencies manually:**
