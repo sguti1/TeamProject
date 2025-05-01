@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stablecoin Horizon ETF</title>
+  <style>
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      background: #f4f4f9;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 40px auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: whitesmoke;
+      background-color: #333;
+      padding: 20px;
+      border-radius: 4px;
+      margin-bottom: 30px;
+    }
+    .flex-section { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-between; margin-bottom: 30px; }
+    .flex-item { flex: 1; min-width: 280px; background: #eaeef2; padding: 20px; border-radius: 6px; }
+    .flex-item h2 {
+      margin-top: 0;
+      color: #2c3e50;
+    }
+    .value-section {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .value-section h2 { color: #34495e; }
+    .value {
+      display: inline-block;
+      font-size: 2.3em;
+      margin: 10px 0;
+      color: #27ae60;
+      background: #eafaf1;
+      padding: 10px 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background-color: #2980b9;
+      color: white;
+      font-weight: normal;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    tr:nth-child(even) {
+      background: #f9f9f9;
+    }
+    tr:hover {
+      background: #f1f7fd;
+    }
+    #chat-box {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 15px;
+      height: 250px;
+      overflow-y: auto;
+      background: #fff;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+      margin-bottom: 10px;
+    }
+    .chat-input {
+      display: flex;
+      gap: 0;
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px 0 0 6px;
+      font-size: 1em;
+    }
+    .chat-input button {
+      padding: 12px 20px;
+      border: none;
+      background: #2980b9;
+      color: white;
+      border-radius: 0 6px 6px 0;
+      cursor: pointer;
+      font-size: 1em;
+    }
+    .chat-input button:hover {
+      background: #1c5980;
+    }
+    .message {
+      margin: 8px 0;
+      line-height: 1.4;
+    }
+    .user {
+      text-align: right;
+      color: #2c3e50;
+    }
+    .assistant {
+      text-align: left;
+      color: #333;
+    }
+    /* Custom scrollbar */
+    #chat-box::-webkit-scrollbar {
+      width: 8px;
+    }
+    #chat-box::-webkit-scrollbar-track {
+      background: #f4f4f9;
+      border-radius: 4px;
+    }
+    #chat-box::-webkit-scrollbar-thumb {
+      background-color: #ccc;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Stablecoin Horizon ETF</h1>
+    <div class="flex-section">
+      <div class="flex-item">
+        <h2>Our Mission</h2>
+        <p>We aim to reduce currency risk in cross-border transactions by creating a more stable foundation for global commerce.</p>
+      </div>
+      <div class="flex-item">
+        <h2>The Problem We're Solving</h2>
+        <ul>
+          <li>Exposes users to the economic policies of a single country</li>
+          <li>Creates currency risk for users in non-USD economies</li>
+          <li>Contributes to global economic imbalances</li>
+          <li>Can be affected by geopolitical events impacting the pegged currency</li>
+        </ul>
+      </div>
+    </div>
+    <div class="value-section">
+      <h2>ETF Value</h2>
+      <div class="value">${{ '{:,.2f}'.format(etf_value) }}</div>
+    </div>
+    <h2>Top 10 Currency Allocations</h2>
+    {{ summary_html|safe }}
+    <h2>Ask the ETF Assistant</h2>
+    <div id="chat-box"></div>
+    <div class="chat-input">
+      <input id="question-input" placeholder="Ask me a question about ETF!">
+      <button id="send-btn">Send</button>
+    </div>
+  </div>
+  <script>
+    document.getElementById('send-btn').addEventListener('click', async function() {
+      var question = document.getElementById('question-input').value;
+      if (!question) return;
+      var chatBox = document.getElementById('chat-box');
+      chatBox.innerHTML += '<div class="message user"><strong>You:</strong> ' + question + '</div>';
+      document.getElementById('question-input').value = '';
+      var response = await fetch('/', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({question: question})
+      });
+      var data = await response.json();
+      chatBox.innerHTML += '<div class="message assistant"><strong>Assistant:</strong> ' + data.answer + '</div>';
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
+  </script>
+</body>
+</html>
